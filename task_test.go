@@ -1,43 +1,55 @@
-package task
+package task_test
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"apigo.cc/go/task"
+	"os"
 )
+
+func TestMain(m *testing.M) {
+	task.DefaultScheduler.Start(context.Background(), nil)
+	os.Exit(m.Run())
+}
 
 func TestTaskBasic(t *testing.T) {
 	var count int32
-	Add("test-basic", "@every 1s", func() {
+	task.Add("test-basic", "@every 1s", func(ctx context.Context) error {
 		atomic.AddInt32(&count, 1)
+		return nil
 	})
 	time.Sleep(2500 * time.Millisecond)
-	
+
 	if atomic.LoadInt32(&count) < 2 {
 		t.Errorf("Expected at least 2 runs, got %d", count)
 	}
+	task.Remove("test-basic")
 }
 
 func TestTaskLifecycle(t *testing.T) {
 	var count int32
 	name := "test-lifecycle"
-	tk := Add(name, "@every 1s", func() {
+	tk := task.Add(name, "@every 1s", func(ctx context.Context) error {
 		atomic.AddInt32(&count, 1)
+		return nil
 	})
-	
-	tk.Disable() // Use object method
+
+	tk.Disable()
 	time.Sleep(1500 * time.Millisecond)
 	if atomic.LoadInt32(&count) != 0 {
 		t.Errorf("Expected 0 runs while disabled, got %d", count)
 	}
-	
-	tasks := List()
+
+	tasks := task.List()
 	found := false
 	for _, item := range tasks {
 		if item.Name == name {
 			found = true
-			if item.Status != StatusDisabled {
+			if item.Status != task.StatusDisabled {
 				t.Errorf("Expected status disabled, got %s", item.Status)
 			}
 		}
@@ -45,67 +57,153 @@ func TestTaskLifecycle(t *testing.T) {
 	if !found {
 		t.Errorf("Task not found in list")
 	}
-	
+
 	tk.Enable()
 	time.Sleep(2500 * time.Millisecond)
 	if atomic.LoadInt32(&count) == 0 {
 		t.Errorf("Expected task to run after enabling")
 	}
-	
-	// Test Remove
+
 	tk.Remove()
-	if Get(name) != nil {
+	if task.Get(name) != nil {
 		t.Errorf("Expected task to be nil after remove")
 	}
 }
 
 func TestTaskPolicySkip(t *testing.T) {
 	var count int32
-	Add("test-skip", "@every 1s", func() {
+	task.Add("test-skip", "@every 1s", func(ctx context.Context) error {
 		atomic.AddInt32(&count, 1)
-		time.Sleep(1500 * time.Millisecond) // Longer than interval
-	}, WithPolicy(PolicySkip))
-	
-	time.Sleep(3500 * time.Millisecond) // T=0 (starts, running), T=1 (skip), T=2 (starts after T=0 finishes at 1.5, next trigger at T=2), T=3 (skip)
-	
-	// T=0: run 1 starts
-	// T=1: skip
-	// T=1.5: run 1 ends
-	// T=2: run 2 starts
-	// T=3: skip
-	// T=3.5: run 2 ends
-	
+		time.Sleep(1500 * time.Millisecond)
+		return nil
+	}, task.Config{Policy: task.PolicySkip})
+
+	time.Sleep(3500 * time.Millisecond)
+
 	if atomic.LoadInt32(&count) != 2 {
 		t.Errorf("Expected exactly 2 runs due to skip policy, got %d", count)
 	}
+	task.Remove("test-skip")
 }
 
 func TestTaskTimeout(t *testing.T) {
-	var errCount int32
-	Add("test-timeout", "@every 1s", func() {
-		time.Sleep(2 * time.Second)
-	}, WithTimeout(500*time.Millisecond), OnError(func(err error) {
-		atomic.AddInt32(&errCount, 1)
-	}))
-	
+	var timeoutHit int32
+	task.Add("test-timeout", "@every 1s", func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				atomic.AddInt32(&timeoutHit, 1)
+			}
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+			return nil
+		}
+	}, task.Config{Timeout: 500 * time.Millisecond})
+
 	time.Sleep(2500 * time.Millisecond)
+
+	if atomic.LoadInt32(&timeoutHit) < 2 {
+		t.Errorf("Expected at least 2 timeout hits, got %d", timeoutHit)
+	}
+	task.Remove("test-timeout")
+}
+
+func TestTaskPanicRecover(t *testing.T) {
+	var count int32
+	task.Add("test-panic", "@every 1s", func(ctx context.Context) error {
+		atomic.AddInt32(&count, 1)
+		panic("boom")
+	})
+
+	time.Sleep(2500 * time.Millisecond)
+
+	if atomic.LoadInt32(&count) < 2 {
+		t.Errorf("Expected at least 2 runs despite panics, got %d", count)
+	}
+	task.Remove("test-panic")
+}
+
+func TestTaskManualRun(t *testing.T) {
+	var count int32
+	name := "test-manual"
+	tk := task.Add(name, "@every 1h", func(ctx context.Context) error {
+		atomic.AddInt32(&count, 1)
+		return nil
+	})
+
+	// Manual run via global function
+	task.Run(name)
+	time.Sleep(100 * time.Millisecond)
+	if atomic.LoadInt32(&count) != 1 {
+		t.Errorf("Expected 1 run after manual Run, got %d", count)
+	}
+
+	// Manual run via task object
+	tk.Run()
+	time.Sleep(100 * time.Millisecond)
+	if atomic.LoadInt32(&count) != 2 {
+		t.Errorf("Expected 2 runs after manual Run, got %d", count)
+	}
+	task.Remove(name)
+}
+
+func TestGracefulStop(t *testing.T) {
+	s := task.NewScheduler()
+	s.Start(context.Background(), nil)
+
+	var finished int32
+	// Use @every 1h to avoid auto-runs.
+	s.Add("test-graceful", "@every 1h", func(ctx context.Context) error {
+		time.Sleep(1 * time.Second)
+		atomic.AddInt32(&finished, 1)
+		return nil
+	}, task.Config{})
+
+	go s.Run("test-graceful") // Trigger manually
 	
-	if atomic.LoadInt32(&errCount) < 2 {
-		t.Errorf("Expected at least 2 timeout errors, got %d", errCount)
+	time.Sleep(200 * time.Millisecond) // Let it start
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	s.Stop(ctx)
+	duration := time.Since(start)
+
+	if atomic.LoadInt32(&finished) != 1 {
+		t.Errorf("Expected exactly 1 task to finish during graceful stop, got %d", atomic.LoadInt32(&finished))
+	}
+	if duration < 500*time.Millisecond {
+		t.Errorf("Stop returned too quickly, didn't wait for task")
 	}
 }
 
-func TestTaskWithError(t *testing.T) {
-	var errCount int32
-	Add("test-error", "@every 1s", func() error {
-		return errors.New("expected error")
-	}, OnError(func(err error) {
-		atomic.AddInt32(&errCount, 1)
-	}))
-	
-	time.Sleep(2500 * time.Millisecond)
-	
-	if atomic.LoadInt32(&errCount) < 2 {
-		t.Errorf("Expected at least 2 errors, got %d", errCount)
+func BenchmarkTaskRegistration(b *testing.B) {
+	s := task.NewScheduler()
+	fn := func(ctx context.Context) error { return nil }
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s.Add("bench", "@every 1h", fn, task.Config{})
 	}
+}
+
+func BenchmarkTaskExecutionOverhead(b *testing.B) {
+	// Since we use cron, we can't easily benchmark the trigger frequency directly,
+	// but we can benchmark the runTask method which contains the wrapper overhead.
+	// We need to use unexported methods or reflection, or just benchmark a mocked run.
+	// Actually, let's just benchmark the Add + List + Get operations which are common.
+	s := task.NewScheduler()
+	fn := func(ctx context.Context) error { return nil }
+	s.Add("bench", "@every 1h", fn, task.Config{})
+	
+	b.Run("Get", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			s.Get("bench")
+		}
+	})
+	
+	b.Run("List", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			s.List()
+		}
+	})
 }

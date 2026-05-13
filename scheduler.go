@@ -2,18 +2,22 @@ package task
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
+	"apigo.cc/go/log"
 	"github.com/robfig/cron/v3"
 )
 
 type Scheduler struct {
-	cron  *cron.Cron
-	tasks map[string]*Task
-	mu    sync.RWMutex
+	cron    *cron.Cron
+	tasks   map[string]*Task
+	mu      sync.RWMutex
+	wg      sync.WaitGroup
+	running bool
 }
 
 var DefaultScheduler = NewScheduler()
@@ -25,54 +29,110 @@ func NewScheduler() *Scheduler {
 	}
 }
 
-func (s *Scheduler) Add(name string, spec string, cmd any, opts ...Option) *Task {
+func (s *Scheduler) Add(name string, spec string, fn func(context.Context) error, cfg Config) *Task {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Remove old task if exists
+	if old, exists := s.tasks[name]; exists {
+		s.cron.Remove(old.entryID)
+		if old.cancel != nil {
+			old.cancel()
+		}
+	}
 
 	t := &Task{
 		Name:   name,
 		Spec:   spec,
+		Config: cfg,
 		Status: StatusIdle,
+		Func:   fn,
 		s:      s,
 	}
 
-	switch fn := cmd.(type) {
-	case func():
-		t.Func = fn
-	case func() error:
-		t.FuncErr = fn
-	default:
-		panic("invalid job function: must be func() or func() error")
-	}
-
-	for _, opt := range opts {
-		opt(t)
-	}
-
-	if t.Policy == PolicyQueue {
-		t.queue = make(chan struct{}, 100)
-	}
-
-	// Remove old task if exists to replace it
-	if old, exists := s.tasks[name]; exists {
-		s.cron.Remove(old.entryID)
-	}
-
-	s.tasks[name] = t
-	id, _ := s.cron.AddFunc(spec, func() {
+	id, err := s.cron.AddFunc(spec, func() {
 		s.runTask(name)
 	})
-	t.entryID = id
+	if err != nil {
+		log.DefaultLogger.Error("failed to add task", "name", name, "spec", spec, "err", err)
+		return nil
+	}
 
+	t.entryID = id
+	s.tasks[name] = t
 	return t
 }
 
-func (s *Scheduler) Start() {
+func (s *Scheduler) Start(ctx context.Context, logger *log.Logger) error {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = true
+	s.mu.Unlock()
+
 	s.cron.Start()
+	if logger != nil {
+		logger.Info("scheduler started")
+	} else {
+		log.DefaultLogger.Info("scheduler started")
+	}
+	return nil
 }
 
-func (s *Scheduler) Stop() {
+func (s *Scheduler) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = false
+	s.mu.Unlock()
+
 	s.cron.Stop()
+
+	s.mu.Lock()
+	for _, t := range s.tasks {
+		if t.cancel != nil {
+			t.cancel()
+		}
+	}
+	s.mu.Unlock()
+
+	// Wait for running tasks with context
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.DefaultLogger.Info("scheduler stopped gracefully")
+		return nil
+	case <-ctx.Done():
+		log.DefaultLogger.Warning("scheduler stop timed out or cancelled", "err", ctx.Err())
+		return ctx.Err()
+	}
+}
+
+func (s *Scheduler) Health() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.running {
+		return errors.New("scheduler is not running")
+	}
+	return nil
+}
+
+func (s *Scheduler) Run(name string) {
+	s.mu.RLock()
+	_, ok := s.tasks[name]
+	s.mu.RUnlock()
+	if ok {
+		go s.runTask(name)
+	}
 }
 
 func (s *Scheduler) Remove(name string) {
@@ -80,7 +140,11 @@ func (s *Scheduler) Remove(name string) {
 	defer s.mu.Unlock()
 	if t, ok := s.tasks[name]; ok {
 		s.cron.Remove(t.entryID)
+		if t.cancel != nil {
+			t.cancel()
+		}
 		delete(s.tasks, name)
+		log.DefaultLogger.Info("task removed", "name", name)
 	}
 }
 
@@ -111,13 +175,9 @@ func (s *Scheduler) runTask(name string) {
 		return
 	}
 
-	if t.Policy == PolicySkip && t.running {
+	if t.Config.Policy == PolicySkip && t.running {
+		log.DefaultLogger.Debug("task skipped", "name", name)
 		s.mu.Unlock()
-		return
-	}
-	if t.Policy == PolicyQueue && t.running {
-		s.mu.Unlock()
-		t.queue <- struct{}{}
 		return
 	}
 
@@ -125,59 +185,41 @@ func (s *Scheduler) runTask(name string) {
 	t.Status = StatusRunning
 	s.mu.Unlock()
 
+	s.wg.Add(1)
+	defer s.wg.Done()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if t.Config.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, t.Config.Timeout)
+	}
+
+	s.mu.Lock()
+	t.cancel = cancel
+	s.mu.Unlock()
+
 	defer func() {
+		cancel()
 		s.mu.Lock()
 		t.running = false
 		t.Status = StatusIdle
+		t.cancel = nil
+		s.mu.Unlock()
+	}()
 
-		if t.Policy == PolicyQueue && len(t.queue) > 0 {
-			<-t.queue
-			s.mu.Unlock()
-			go s.runTask(name)
-		} else {
-			s.mu.Unlock()
+	// Recover
+	defer func() {
+		if r := recover(); r != nil {
+			log.DefaultLogger.Error("task panic recovered", "name", name, "err", r, "stack", string(debug.Stack()))
 		}
 	}()
 
 	start := time.Now()
-	var err error
-
-	if t.Timeout > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), t.Timeout)
-		defer cancel()
-
-		done := make(chan error, 1)
-		go func() {
-			if t.FuncErr != nil {
-				done <- t.FuncErr()
-			} else {
-				t.Func()
-				done <- nil
-			}
-		}()
-
-		select {
-		case <-ctx.Done():
-			err = fmt.Errorf("task %s timed out after %v", t.Name, t.Timeout)
-		case e := <-done:
-			err = e
-		}
-	} else {
-		if t.FuncErr != nil {
-			err = t.FuncErr()
-		} else {
-			t.Func()
-		}
-	}
-
+	err := t.Func(ctx)
 	duration := time.Since(start)
+
 	if err != nil {
-		if t.onError != nil {
-			t.onError(err)
-		}
+		log.DefaultLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
 	} else {
-		if t.onSuccess != nil {
-			t.onSuccess(duration)
-		}
+		log.DefaultLogger.Info("task success", "name", name, "duration", duration.String())
 	}
 }

@@ -1,4 +1,8 @@
-.*
-!.gitignore
-!.geminiignore
-go.sum
+.geminiignore
+.gemini
+.ai/
+env.json
+env.yml
+env.yaml
+.log.meta.json
+/CODE-FULL.md

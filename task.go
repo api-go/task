@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -11,7 +12,6 @@ type Policy int
 const (
 	PolicyParallel Policy = iota
 	PolicySkip
-	PolicyQueue
 )
 
 type Status string
@@ -22,32 +22,28 @@ const (
 	StatusDisabled Status = "disabled"
 )
 
-type JobFunc func()
-type JobFuncWithError func() error
-
-type Option func(*Task)
+// Config 任务配置
+type Config struct {
+	Policy  Policy        `json:"policy"`
+	Timeout time.Duration `json:"timeout"`
+}
 
 // Task 代表一个被调度的任务
 type Task struct {
-	Name    string        `json:"name"`
-	Spec    string        `json:"spec"`
-	Policy  Policy        `json:"policy"`
-	Timeout time.Duration `json:"timeout"`
-	Status  Status        `json:"status"`
+	Name   string `json:"name"`
+	Spec   string `json:"spec"`
+	Config Config `json:"config"`
+	Status Status `json:"status"`
 
-	Func    JobFunc          `json:"-"`
-	FuncErr JobFuncWithError `json:"-"`
-
-	onSuccess func(duration time.Duration)
-	onError   func(err error)
+	Func func(ctx context.Context) error `json:"-"`
 
 	s       *Scheduler
 	entryID cron.EntryID
 	running bool
-	queue   chan struct{}
+	cancel  context.CancelFunc
 }
 
-// Disable 禁用该任务，到了调度时间也不会执行
+// Disable 禁用该任务
 func (t *Task) Disable() {
 	t.s.mu.Lock()
 	defer t.s.mu.Unlock()
@@ -66,65 +62,36 @@ func (t *Task) Remove() {
 	t.s.Remove(t.Name)
 }
 
-// Global default scheduler proxy methods
-
-// Add 注册一个新任务到全局默认调度器，并返回 Task 对象实例
-func Add(name string, spec string, cmd any, opts ...Option) *Task {
-	return DefaultScheduler.Add(name, spec, cmd, opts...)
+// Add 注册一个新任务到全局默认调度器
+func Add(name string, spec string, fn func(ctx context.Context) error, cfg ...Config) *Task {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
+	return DefaultScheduler.Add(name, spec, fn, c)
 }
 
-// Get 获取全局默认调度器中指定名字的 Task 对象
+// Get 获取指定名字的 Task
 func Get(name string) *Task {
 	return DefaultScheduler.Get(name)
 }
 
-// List 获取全局默认调度器中所有的 Task 对象
+// List 获取所有任务
 func List() []*Task {
 	return DefaultScheduler.List()
 }
 
-// Remove 根据名字从全局默认调度器中移除任务
+// Remove 从全局默认调度器中移除任务
 func Remove(name string) {
 	DefaultScheduler.Remove(name)
 }
 
-// Start 启动全局默认调度器
-func Start() {
-	DefaultScheduler.Start()
+// Run 手动执行指定名字的任务
+func Run(name string) {
+	DefaultScheduler.Run(name)
 }
 
-// Stop 停止全局默认调度器
-func Stop() {
-	DefaultScheduler.Stop()
-}
-
-// Options
-
-func WithPolicy(p Policy) Option {
-	return func(t *Task) {
-		t.Policy = p
-	}
-}
-
-func WithTimeout(d time.Duration) Option {
-	return func(t *Task) {
-		t.Timeout = d
-	}
-}
-
-func OnSuccess(fn func(duration time.Duration)) Option {
-	return func(t *Task) {
-		t.onSuccess = fn
-	}
-}
-
-func OnError(fn func(err error)) Option {
-	return func(t *Task) {
-		t.onError = fn
-	}
-}
-
-func init() {
-	// 默认在加载时启动，若无任务则仅占用极少量等待资源
-	Start()
+// Run 手动执行该任务
+func (t *Task) Run() {
+	t.s.Run(t.Name)
 }

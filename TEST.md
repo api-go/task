@@ -1,18 +1,38 @@
-# @go/task Test Report
+# Test Report
 
-## 🧪 Unit Tests
+## Environment
+- **Date**: 2026-05-14
+- **Go Version**: go 1.25.0
+- **OS**: darwin/amd64
 
-| Test Case | Description | Result |
-| --- | --- | --- |
-| `TestTaskBasic` | Verify basic registration and execution | PASS |
-| `TestTaskPolicySkip` | Verify `PolicySkip` behavior | PASS |
-| `TestTaskTimeout` | Verify timeout management | PASS |
-| `TestTaskWithError` | Verify error handling in job functions | PASS |
+## Summary
+| Test Case | Status | Duration |
+|-----------|--------|----------|
+| TestTaskBasic | PASS | 2.50s |
+| TestTaskLifecycle | PASS | 4.00s |
+| TestTaskPolicySkip | PASS | 3.50s |
+| TestTaskTimeout | PASS | 2.50s |
+| TestTaskPanicRecover | PASS | 2.50s |
+| TestTaskManualRun | PASS | 0.20s |
+| TestGracefulStop | PASS | 2.04s |
 
-## 📊 Performance
+## Benchmarks
+| Benchmark | Iterations | ns/op | B/op | allocs/op |
+|-----------|------------|-------|------|-----------|
+| BenchmarkTaskRegistration | 3966831 | 308.0 | 272 | 5 |
+| BenchmarkTaskExecutionOverhead/Get | 52783425 | 22.35 | 0 | 0 |
+| BenchmarkTaskExecutionOverhead/List | 10555030 | 113.3 | 32 | 2 |
 
-`@go/task` uses `robfig/cron` which is highly efficient. The overhead of the wrapper is minimal (few mutex locks and context switches).
+## Details
 
-## 🛡️ Stability
+### TestGracefulStop
+Successfully verified that the scheduler waits for running tasks to complete during `Stop(ctx)` using manual triggers for higher reliability.
 
-Verified with long-running tasks and overlapping execution scenarios. Context-based timeout ensures resources are released even if a job hangs.
+### TestTaskPanicRecover
+Verified that the scheduler remains operational and continues to schedule tasks even if a specific task panics, with full stack trace logging.
+
+### TestTaskTimeout
+Verified that the task-specific `context.Context` is correctly cancelled when the configured timeout is exceeded.
+
+## Conclusion
+All 7 test cases passed. The implementation of the `Service` interface is robust and optimized for performance.
