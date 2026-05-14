@@ -117,13 +117,23 @@ func (s *Scheduler) Stop(ctx context.Context) error {
 	}
 }
 
-func (s *Scheduler) Health() error {
+func (s *Scheduler) Status() (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.running {
-		return errors.New("scheduler is not running")
+		return "stopped", errors.New("scheduler is not running")
 	}
-	return nil
+	return "running", nil
+}
+
+// Start 开始全局默认调度器
+func Start(ctx context.Context, logger *log.Logger) error {
+	return DefaultScheduler.Start(ctx, logger)
+}
+
+// Stop 停止全局默认调度器
+func Stop(ctx context.Context) error {
+	return DefaultScheduler.Stop(ctx)
 }
 
 func (s *Scheduler) Run(name string) {

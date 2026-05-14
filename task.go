@@ -28,6 +28,16 @@ type Config struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+// WithPolicy 创建指定策略的配置
+func WithPolicy(p Policy) Config {
+	return Config{Policy: p}
+}
+
+// WithTimeout 创建指定超时时间的配置
+func WithTimeout(d time.Duration) Config {
+	return Config{Timeout: d}
+}
+
 // Task 代表一个被调度的任务
 type Task struct {
 	Name   string `json:"name"`

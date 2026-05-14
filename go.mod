@@ -8,10 +8,10 @@ require (
 )
 
 require (
-	apigo.cc/go/cast v1.3.0 // indirect
+	apigo.cc/go/cast v1.3.2 // indirect
 	apigo.cc/go/config v1.3.0 // indirect
 	apigo.cc/go/encoding v1.3.0 // indirect
-	apigo.cc/go/file v1.3.0 // indirect
+	apigo.cc/go/file v1.3.1 // indirect
 	apigo.cc/go/id v1.3.0 // indirect
 	apigo.cc/go/rand v1.3.0 // indirect
 	apigo.cc/go/safe v1.3.0 // indirect
