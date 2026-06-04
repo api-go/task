@@ -73,11 +73,6 @@ func (s *Scheduler) Start(ctx context.Context, logger *log.Logger) error {
 	s.mu.Unlock()
 
 	s.cron.Start()
-	if logger != nil {
-		logger.Info("scheduler started")
-	} else {
-		log.DefaultLogger.Info("scheduler started")
-	}
 	return nil
 }
 
@@ -109,10 +104,8 @@ func (s *Scheduler) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
-		log.DefaultLogger.Info("scheduler stopped gracefully")
 		return nil
 	case <-ctx.Done():
-		log.DefaultLogger.Warning("scheduler stop timed out or cancelled", "err", ctx.Err())
 		return ctx.Err()
 	}
 }
