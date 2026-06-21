@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.5.4 - 2026-06-21
+- **依赖更新**: 升级依赖 `jsmod` 至 `v1.5.3`，`cast` 至 `v1.5.3`，`rand` 至 `v1.5.3`，`encoding` 至 `v1.5.4`，`shell` 至 `v1.5.3`，`safe` 至 `v1.5.2`，`id` 至 `v1.5.4`，`file` 至 `v1.5.5`，`config` 至 `v1.5.3`，`log` 至 `v1.5.8`。
+
 ## v1.5.2 - 2026-06-05
 - **优化: 生命周期日志清理**:
   - 移除了内部冗余的 `scheduler started` 与 `scheduler stopped gracefully` 控制台输出。这些状态现由 `apigo.cc/go/starter` 框架统一劫持并提供标准化的生命周期审计。

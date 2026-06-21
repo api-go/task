@@ -1,7 +1,7 @@
 # Test Report
 
 ## Environment
-- **Date**: 2026-05-14
+- **Date**: 2026-06-21
 - **Go Version**: go 1.25.0
 - **OS**: darwin/amd64
 
@@ -14,14 +14,14 @@
 | TestTaskTimeout | PASS | 2.50s |
 | TestTaskPanicRecover | PASS | 2.50s |
 | TestTaskManualRun | PASS | 0.20s |
-| TestGracefulStop | PASS | 2.04s |
+| TestGracefulStop | PASS | 1.00s |
 
 ## Benchmarks
-| Benchmark | Iterations | ns/op | B/op | allocs/op |
-|-----------|------------|-------|------|-----------|
-| BenchmarkTaskRegistration | 3966831 | 308.0 | 272 | 5 |
-| BenchmarkTaskExecutionOverhead/Get | 52783425 | 22.35 | 0 | 0 |
-| BenchmarkTaskExecutionOverhead/List | 10555030 | 113.3 | 32 | 2 |
+| Benchmark | Iterations | ns/op |
+|-----------|------------|-------|
+| BenchmarkTaskRegistration | 4059084 | 294.0 |
+| BenchmarkTaskExecutionOverhead/Get | 51555876 | 19.81 |
+| BenchmarkTaskExecutionOverhead/List | 9835569 | 106.5 |
 
 ## Details
 
