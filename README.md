@@ -33,8 +33,9 @@ task.Add("Report", "@every 1m", func(ctx context.Context) error {
     // ...
     return nil
 }, task.Config{
-    Policy:  task.PolicySkip,    // 如果上次还没跑完，跳过本次
-    Timeout: 5 * time.Second,   // 单次执行超时
+    Policy:             task.PolicySkip,    // 如果上次还没跑完，跳过本次
+    Timeout:            5 * time.Second,    // 单次执行超时
+    SuppressSuccessLog: true,               // 抑制默认 success 日志，由任务自行汇报
 })
 ```
 

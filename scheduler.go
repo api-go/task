@@ -222,7 +222,7 @@ func (s *Scheduler) runTask(name string) {
 
 	if err != nil {
 		log.DefaultLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
-	} else {
+	} else if !t.Config.SuppressSuccessLog {
 		log.DefaultLogger.Info("task success", "name", name, "duration", duration.String())
 	}
 }

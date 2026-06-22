@@ -24,8 +24,9 @@ const (
 
 // Config 任务配置
 type Config struct {
-	Policy  Policy        `json:"policy"`
-	Timeout time.Duration `json:"timeout"`
+	Policy             Policy        `json:"policy"`
+	Timeout            time.Duration `json:"timeout"`
+	SuppressSuccessLog bool          `json:"suppressSuccessLog"`
 }
 
 // WithPolicy 创建指定策略的配置

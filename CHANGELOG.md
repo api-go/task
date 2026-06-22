@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.5.5 - 2026-06-22
+- **新增**: `Config.SuppressSuccessLog` 字段，设为 true 时调度器跳过 success 日志，由任务函数自行按处理量汇报，避免空轮询日志噪音。
+
 ## v1.5.4 - 2026-06-21
 - **依赖更新**: 升级依赖 `jsmod` 至 `v1.5.3`，`cast` 至 `v1.5.3`，`rand` 至 `v1.5.3`，`encoding` 至 `v1.5.4`，`shell` 至 `v1.5.3`，`safe` 至 `v1.5.2`，`id` 至 `v1.5.4`，`file` 至 `v1.5.5`，`config` 至 `v1.5.3`，`log` 至 `v1.5.8`。
 

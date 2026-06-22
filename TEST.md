@@ -1,7 +1,7 @@
 # Test Report
 
 ## Environment
-- **Date**: 2026-06-21
+- **Date**: 2026-06-22
 - **Go Version**: go 1.25.0
 - **OS**: darwin/amd64
 
@@ -19,9 +19,9 @@
 ## Benchmarks
 | Benchmark | Iterations | ns/op |
 |-----------|------------|-------|
-| BenchmarkTaskRegistration | 4059084 | 294.0 |
-| BenchmarkTaskExecutionOverhead/Get | 51555876 | 19.81 |
-| BenchmarkTaskExecutionOverhead/List | 9835569 | 106.5 |
+| BenchmarkTaskRegistration | 3664093 | 318.1 |
+| BenchmarkTaskExecutionOverhead/Get | 52381898 | 26.07 |
+| BenchmarkTaskExecutionOverhead/List | 10123669 | 116.2 |
 
 ## Details
 
