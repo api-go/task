@@ -1,5 +1,8 @@
 # Test Report
 
+## v1.5.6 验证
+- 独立模块解析、全量测试与基准测试均通过。
+
 ## Environment
 - **Date**: 2026-06-22
 - **Go Version**: go 1.25.0

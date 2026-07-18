@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.5.6 - 2026-07-18
+- **依赖校验修复**: 更新 `go.sum` 为当前可验证的依赖 checksum。
+
 ## v1.5.5 - 2026-06-22
 - **新增**: `Config.SuppressSuccessLog` 字段，设为 true 时调度器跳过 success 日志，由任务函数自行按处理量汇报，避免空轮询日志噪音。
 
