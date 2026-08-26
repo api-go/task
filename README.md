@@ -63,15 +63,53 @@ tk.Disable()  // 挂起任务
 tk.Enable()   // 恢复任务
 tk.Remove()   // 彻底移除
 
+task.Disable("CleanLog") // 按名称挂起，未知任务返回 false
+task.Enable("CleanLog")  // 按名称恢复，未知任务返回 false
+
 // 查询
 tasks := task.List()
 ```
+
+### 4. 任务上下文日志
+
+调度器从生命周期管理器接收父 Logger，并为每次实际执行创建独立 Trace。任务函数可直接从 Context 取得本次运行的 Logger：
+
+```go
+task.Add("Report", "@every 1m", func(ctx context.Context) error {
+    logger := task.Logger(ctx)
+    logger.Info("report generated", "count", 12)
+    return nil
+})
+```
+
+空轮询任务可使用 `SuppressSuccessLog` 避免无效磁盘日志；失败、Panic 和未抑制的成功日志均沿用本次运行的 Trace。
+
+### 5. Redis 可靠队列
+
+`task/queue` 按全局队列名使用约定连接 `redis.task`，调用方无需持有 Redis Client 或 Context：
+
+```go
+import "apigo.cc/go/task/queue"
+
+_ = queue.Add("translation", item)
+items, _ := queue.Fetch("translation", "default", 50)
+// processing 中存在未完成批次时，Fetch 忽略 n 并返回原批次。
+// 业务成功后一次性确认当前消费者的 processing。
+_ = queue.Finish("translation", "default")
+
+// 持久化延迟任务；到期后由 Fetch 提升到 pending。
+_ = queue.AddAfter("translation", item, 30*time.Second)
+```
+
+队列使用 `pending`、按消费者隔离的 `processing` 和 Sorted Set `delayed` 三条持久化通道。任务失败时不调用 `Finish`，下一次 `Fetch` 会恢复同一 processing 批次。
+
+`Fetch` 使用标准 `LMOVE` 原子地把任务转入 processing。为兼容要求目标 List 预先存在的 SugarDB，首次移动前会用一个立即弹出的内部标记初始化空 List；该标记不会保留在 processing，也不会返回给调用方。标准 Redis 会在弹出最后一个元素后删除 key，随后的 `LMOVE` 会按标准语义创建目标 List。
 
 ## 🛡️ 健壮性与安全
 
 *   **Panic Recovery**: 框架内部自动捕获任务执行中的 Panic，并记录堆栈日志，确保调度引擎持续稳定。
 *   **Context 传播**: 任务内部应监听 `ctx.Done()` 以响应系统的停止信号。
-*   **标准化日志**: 集成 `@go/log`，自动记录每个任务的开始、成功、失败（含耗时）以及 Panic 信息。
+*   **标准化日志**: 集成 `@go/log`，为每次实际执行创建独立 Trace，并记录成功、失败（含耗时）以及 Panic 信息。
 
 ## 🧪 验证状态
 测试全部通过，性能达标。

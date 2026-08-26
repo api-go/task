@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.7 - 2026-08-27
+- **可靠队列**: 新增 `task/queue`，提供 `Add`、`Fetch`、`Finish`、`FetchCount` 与泛型 `Decode`；通过全局队列名和 `redis.task` 配置契约管理 pending 及消费者隔离的 processing。
+- **Redis 兼容**: 保持标准 `LMOVE` 原子移动语义，并通过不保留数据的空 List 初始化兼容 SugarDB 对目标 List 预先存在的要求。
+- **延迟任务**: 新增 `AddAfter` 与 `PromoteDelayed`，使用 Redis Sorted Set 按到期时间提升任务，避免消费者反复读取尚未到期的重试项。
+- **运行控制**: 新增包级 `Enable(name)`、`Disable(name)`，便于管理端先操作运行状态、成功后再持久化恢复状态。
+- **日志传导**: 调度器继承生命周期 Logger，为每次任务运行创建独立 Trace，并通过 `WithLogger`、`Logger` 在 Context 中传导；空轮询不额外产生启动日志。
+- **依赖更新**: 升级 `redis` 至 `v1.5.13`、`jsmod` 至 `v1.5.4`。
+
 ## v1.5.6 - 2026-07-18
 - **依赖校验修复**: 更新 `go.sum` 为当前可验证的依赖 checksum。
 

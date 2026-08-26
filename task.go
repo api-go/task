@@ -87,6 +87,26 @@ func Get(name string) *Task {
 	return DefaultScheduler.Get(name)
 }
 
+// Enable enables a registered task. It returns false when the task is unknown.
+func Enable(name string) bool {
+	t := Get(name)
+	if t == nil {
+		return false
+	}
+	t.Enable()
+	return true
+}
+
+// Disable disables a registered task. It returns false when the task is unknown.
+func Disable(name string) bool {
+	t := Get(name)
+	if t == nil {
+		return false
+	}
+	t.Disable()
+	return true
+}
+
 // List 获取所有任务
 func List() []*Task {
 	return DefaultScheduler.List()

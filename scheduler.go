@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"apigo.cc/go/id"
 	"apigo.cc/go/log"
 	"github.com/robfig/cron/v3"
 )
@@ -17,6 +18,7 @@ type Scheduler struct {
 	tasks   map[string]*Task
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
+	logger  *log.Logger
 	running bool
 }
 
@@ -70,6 +72,9 @@ func (s *Scheduler) Start(ctx context.Context, logger *log.Logger) error {
 		return nil
 	}
 	s.running = true
+	if logger != nil {
+		s.logger = logger
+	}
 	s.mu.Unlock()
 
 	s.cron.Start()
@@ -190,8 +195,16 @@ func (s *Scheduler) runTask(name string) {
 
 	s.wg.Add(1)
 	defer s.wg.Done()
+	taskLogger := log.DefaultLogger
+	s.mu.RLock()
+	parentLogger := s.logger
+	s.mu.RUnlock()
+	if parentLogger != nil {
+		taskLogger = parentLogger.New(id.Get10Bytes14MPerSecond())
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = WithLogger(ctx, taskLogger)
 	if t.Config.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, t.Config.Timeout)
 	}
@@ -212,7 +225,7 @@ func (s *Scheduler) runTask(name string) {
 	// Recover
 	defer func() {
 		if r := recover(); r != nil {
-			log.DefaultLogger.Error("task panic recovered", "name", name, "err", r, "stack", string(debug.Stack()))
+			taskLogger.Error("task panic recovered", "name", name, "err", r, "stack", string(debug.Stack()))
 		}
 	}()
 
@@ -221,8 +234,15 @@ func (s *Scheduler) runTask(name string) {
 	duration := time.Since(start)
 
 	if err != nil {
-		log.DefaultLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
+		taskLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
 	} else if !t.Config.SuppressSuccessLog {
-		log.DefaultLogger.Info("task success", "name", name, "duration", duration.String())
+		taskLogger.Info("task success", "name", name, "duration", duration.String())
 	}
+}
+
+func traceID(logger *log.Logger) string {
+	if logger == nil {
+		return ""
+	}
+	return logger.GetTraceId()
 }
