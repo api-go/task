@@ -24,9 +24,11 @@ const (
 
 // Config 任务配置
 type Config struct {
-	Policy             Policy        `json:"policy"`
-	Timeout            time.Duration `json:"timeout"`
-	SuppressSuccessLog bool          `json:"suppressSuccessLog"`
+	Policy                 Policy                                     `json:"policy"`
+	Timeout                time.Duration                              `json:"timeout"`
+	SuppressSuccessLog     bool                                       `json:"suppressSuccessLog"`
+	MaxConsecutiveFailures int                                        `json:"maxConsecutiveFailures"`
+	OnAutoDisable          func(name string, failures int, err error) `json:"-"`
 }
 
 // WithPolicy 创建指定策略的配置
@@ -41,10 +43,11 @@ func WithTimeout(d time.Duration) Config {
 
 // Task 代表一个被调度的任务
 type Task struct {
-	Name   string `json:"name"`
-	Spec   string `json:"spec"`
-	Config Config `json:"config"`
-	Status Status `json:"status"`
+	Name                string `json:"name"`
+	Spec                string `json:"spec"`
+	Config              Config `json:"config"`
+	Status              Status `json:"status"`
+	ConsecutiveFailures int    `json:"consecutiveFailures"`
 
 	Func func(ctx context.Context) error `json:"-"`
 
@@ -52,6 +55,21 @@ type Task struct {
 	entryID cron.EntryID
 	running bool
 	cancel  context.CancelFunc
+}
+
+// State returns a concurrency-safe snapshot of the task's runtime state.
+func (t *Task) State() (Status, int) {
+	t.s.mu.RLock()
+	defer t.s.mu.RUnlock()
+	return t.Status, t.ConsecutiveFailures
+}
+
+// Snapshot returns a concurrency-safe copy for inspection or serialization.
+func (t *Task) Snapshot() *Task {
+	t.s.mu.RLock()
+	defer t.s.mu.RUnlock()
+	snapshot := *t
+	return &snapshot
 }
 
 // Disable 禁用该任务
@@ -66,6 +84,7 @@ func (t *Task) Enable() {
 	t.s.mu.Lock()
 	defer t.s.mu.Unlock()
 	t.Status = StatusIdle
+	t.ConsecutiveFailures = 0
 }
 
 // Remove 从调度器中彻底移除该任务

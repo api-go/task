@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.5.8 - 2026-08-31
+- **失败保护**: 支持连续失败次数统计、自动停用回调及状态快照，避免任务持续消耗资源。
+
 ## v1.5.7 - 2026-08-27
 - **可靠队列**: 新增 `task/queue`，提供 `Add`、`Fetch`、`Finish`、`FetchCount` 与泛型 `Decode`；通过全局队列名和 `redis.task` 配置契约管理 pending 及消费者隔离的 processing。
 - **Redis 兼容**: 保持标准 `LMOVE` 原子移动语义，并通过不保留数据的空 List 初始化兼容 SugarDB 对目标 List 预先存在的要求。

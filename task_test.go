@@ -147,6 +147,85 @@ func TestTaskManualRun(t *testing.T) {
 	task.Remove(name)
 }
 
+func TestTaskAutoDisablesAfterConsecutiveFailures(t *testing.T) {
+	s := task.NewScheduler()
+	if err := s.Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop(context.Background())
+
+	disabled := make(chan struct{}, 1)
+	tk := s.Add("test-auto-disable", "@every 1h", func(context.Context) error {
+		return errors.New("boom")
+	}, task.Config{
+		MaxConsecutiveFailures: 3,
+		OnAutoDisable: func(name string, failures int, err error) {
+			if name != "test-auto-disable" || failures != 3 || err == nil {
+				t.Errorf("unexpected auto-disable callback: name=%s failures=%d err=%v", name, failures, err)
+			}
+			disabled <- struct{}{}
+		},
+	})
+
+	for i := 0; i < 3; i++ {
+		s.Run(tk.Name)
+		deadline := time.Now().Add(time.Second)
+		_, failures := tk.State()
+		for failures < i+1 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+			_, failures = tk.State()
+		}
+	}
+	select {
+	case <-disabled:
+	case <-time.After(time.Second):
+		t.Fatal("auto-disable callback was not called")
+	}
+	status, failures := tk.State()
+	if status != task.StatusDisabled || failures != 3 {
+		t.Fatalf("task status=%s failures=%d, want disabled after 3 failures", status, failures)
+	}
+	tk.Enable()
+	status, failures = tk.State()
+	if status != task.StatusIdle || failures != 0 {
+		t.Fatalf("enabled task status=%s failures=%d, want idle with reset failures", status, failures)
+	}
+}
+
+func TestTaskSuccessResetsConsecutiveFailures(t *testing.T) {
+	s := task.NewScheduler()
+	if err := s.Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop(context.Background())
+
+	var calls atomic.Int32
+	tk := s.Add("test-failure-reset", "@every 1h", func(context.Context) error {
+		if calls.Add(1) == 1 {
+			return errors.New("boom")
+		}
+		return nil
+	}, task.Config{MaxConsecutiveFailures: 2})
+
+	s.Run(tk.Name)
+	deadline := time.Now().Add(time.Second)
+	_, failures := tk.State()
+	for failures != 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		_, failures = tk.State()
+	}
+	s.Run(tk.Name)
+	deadline = time.Now().Add(time.Second)
+	status, failures := tk.State()
+	for (calls.Load() < 2 || failures != 0 || status == task.StatusRunning) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		status, failures = tk.State()
+	}
+	if status != task.StatusIdle || failures != 0 {
+		t.Fatalf("task status=%s failures=%d, want idle with reset failures", status, failures)
+	}
+}
+
 func TestGracefulStop(t *testing.T) {
 	s := task.NewScheduler()
 	s.Start(context.Background(), nil)
@@ -160,12 +239,12 @@ func TestGracefulStop(t *testing.T) {
 	}, task.Config{})
 
 	go s.Run("test-graceful") // Trigger manually
-	
+
 	time.Sleep(200 * time.Millisecond) // Let it start
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	s.Stop(ctx)
 	duration := time.Since(start)
 
@@ -194,13 +273,13 @@ func BenchmarkTaskExecutionOverhead(b *testing.B) {
 	s := task.NewScheduler()
 	fn := func(ctx context.Context) error { return nil }
 	s.Add("bench", "@every 1h", fn, task.Config{})
-	
+
 	b.Run("Get", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			s.Get("bench")
 		}
 	})
-	
+
 	b.Run("List", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			s.List()

@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -217,26 +218,51 @@ func (s *Scheduler) runTask(name string) {
 		cancel()
 		s.mu.Lock()
 		t.running = false
-		t.Status = StatusIdle
+		if t.Status != StatusDisabled {
+			t.Status = StatusIdle
+		}
 		t.cancel = nil
 		s.mu.Unlock()
 	}()
 
-	// Recover
-	defer func() {
-		if r := recover(); r != nil {
-			taskLogger.Error("task panic recovered", "name", name, "err", r, "stack", string(debug.Stack()))
-		}
-	}()
-
 	start := time.Now()
-	err := t.Func(ctx)
+	err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				taskLogger.Error("task panic recovered", "name", name, "err", r, "stack", string(debug.Stack()))
+				err = fmt.Errorf("task panic: %v", r)
+			}
+		}()
+		return t.Func(ctx)
+	}()
 	duration := time.Since(start)
 
 	if err != nil {
+		s.mu.Lock()
+		t.ConsecutiveFailures++
+		failures := t.ConsecutiveFailures
+		autoDisabled := t.Config.MaxConsecutiveFailures > 0 && failures >= t.Config.MaxConsecutiveFailures
+		if autoDisabled {
+			t.Status = StatusDisabled
+		}
+		onAutoDisable := t.Config.OnAutoDisable
+		s.mu.Unlock()
 		taskLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
+		if autoDisabled {
+			taskLogger.Error("task auto disabled", "name", name, "consecutiveFailures", failures)
+			if onAutoDisable != nil {
+				onAutoDisable(name, failures, err)
+			}
+		}
 	} else if !t.Config.SuppressSuccessLog {
+		s.mu.Lock()
+		t.ConsecutiveFailures = 0
+		s.mu.Unlock()
 		taskLogger.Info("task success", "name", name, "duration", duration.String())
+	} else {
+		s.mu.Lock()
+		t.ConsecutiveFailures = 0
+		s.mu.Unlock()
 	}
 }
 
