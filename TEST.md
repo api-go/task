@@ -1,6 +1,6 @@
 # Test Report
 
-## v1.5.7 验证
+## v1.5.9 验证
 - `go test -v ./...`：通过；在临时标准 Redis 8.8 实例上覆盖任务调度、运行控制和可靠队列行为，测试后已关闭实例。
 - `go test -bench=. ./...`：通过；`BenchmarkTaskRegistration-16` 为 `138.8 ns/op`，Task Get/List 分别为 `7.614 ns/op`、`67.71 ns/op`（Apple M3 Max）。
 - 队列测试验证 processing 恢复、批量 Fetch/Finish、compatibility marker 不残留，以及 Sorted Set 延迟任务只在到期后提升；同一组测试已在未修改的 SugarDB 实例上通过。
