@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	apigo.cc/go/cast v1.5.7
 	apigo.cc/go/id v1.5.9
-	apigo.cc/go/log v1.5.14
+	apigo.cc/go/log v1.5.15
 	apigo.cc/go/redis v1.5.17
 	github.com/robfig/cron/v3 v3.0.1
 )

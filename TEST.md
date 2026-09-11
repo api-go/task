@@ -1,5 +1,9 @@
 # Test Report
 
+## v1.5.12 验证
+- 验证首次 Stop 超时后，后续 Stop 继续等待在途任务完成。
+- `TestTaskTimeout` 边界用例连续 5 次通过；全量测试重跑与 benchmark 通过。
+
 ## v1.5.10 验证
 - `go test -v ./...`：通过；在临时标准 Redis 8.8 实例上覆盖任务调度、运行控制和可靠队列行为，测试后已关闭实例。
 - `go test -bench=. ./...`：通过；`BenchmarkTaskRegistration-16` 为 `138.8 ns/op`，Task Get/List 分别为 `7.614 ns/op`、`67.71 ns/op`（Apple M3 Max）。

@@ -256,6 +256,44 @@ func TestGracefulStop(t *testing.T) {
 	}
 }
 
+func TestStopContinuesWaitingAfterTimeout(t *testing.T) {
+	s := task.NewScheduler()
+	if err := s.Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	s.Add("test-repeated-stop", "@every 1h", func(context.Context) error {
+		close(started)
+		<-release
+		return nil
+	}, task.Config{})
+	s.Run("test-repeated-stop")
+	<-started
+
+	firstCtx, firstCancel := context.WithCancel(context.Background())
+	firstCancel()
+	if err := s.Stop(firstCtx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("first Stop error = %v, want context canceled", err)
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- s.Stop(context.Background())
+	}()
+	select {
+	case err := <-secondDone:
+		t.Fatalf("second Stop returned before task finished: %v", err)
+	default:
+	}
+
+	close(release)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second Stop error = %v", err)
+	}
+}
+
 func BenchmarkTaskRegistration(b *testing.B) {
 	s := task.NewScheduler()
 	fn := func(ctx context.Context) error { return nil }

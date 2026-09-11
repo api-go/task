@@ -84,22 +84,18 @@ func (s *Scheduler) Start(ctx context.Context, logger *log.Logger) error {
 
 func (s *Scheduler) Stop(ctx context.Context) error {
 	s.mu.Lock()
-	if !s.running {
-		s.mu.Unlock()
-		return nil
-	}
+	wasRunning := s.running
 	s.running = false
-	s.mu.Unlock()
-
-	s.cron.Stop()
-
-	s.mu.Lock()
 	for _, t := range s.tasks {
 		if t.cancel != nil {
 			t.cancel()
 		}
 	}
 	s.mu.Unlock()
+
+	if wasRunning {
+		s.cron.Stop()
+	}
 
 	// Wait for running tasks with context
 	done := make(chan struct{})
@@ -179,7 +175,7 @@ func (s *Scheduler) Get(name string) *Task {
 func (s *Scheduler) runTask(name string) {
 	s.mu.Lock()
 	t, ok := s.tasks[name]
-	if !ok || t.Status == StatusDisabled {
+	if !s.running || !ok || t.Status == StatusDisabled {
 		s.mu.Unlock()
 		return
 	}
@@ -192,9 +188,9 @@ func (s *Scheduler) runTask(name string) {
 
 	t.running = true
 	t.Status = StatusRunning
+	s.wg.Add(1)
 	s.mu.Unlock()
 
-	s.wg.Add(1)
 	defer s.wg.Done()
 	taskLogger := log.DefaultLogger
 	s.mu.RLock()
