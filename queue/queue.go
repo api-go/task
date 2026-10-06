@@ -79,10 +79,97 @@ func PromoteDelayed(queueName string, limit int) error {
 			_ = rd.ZREM(delayedKey(queueName), member)
 			continue
 		}
-		_ = rd.Do("LPUSH", pendingKey(queueName), parts[1])
-		_ = rd.ZREM(delayedKey(queueName), member)
+		if result := rd.Do("LPUSH", pendingKey(queueName), parts[1]); result.Error != nil {
+			return result.Error
+		}
+		if result := rd.Do("ZREM", delayedKey(queueName), member); result.Error != nil {
+			return result.Error
+		}
 	}
-	return rd.Error
+	return nil
+}
+
+// Retry persists the replacement before acknowledging processing. Recovery
+// may replay the original after a crash, so handlers must remain idempotent.
+func Retry(queueName, consumerID string, item any, delayMillis int64) error {
+	if delayMillis < 0 || delayMillis > int64((24*time.Hour)/time.Millisecond) {
+		return fmt.Errorf("retry delay must be between 0 and 86400000 milliseconds")
+	}
+	if err := requireSingleProcessingItem(queueName, consumerID); err != nil {
+		return err
+	}
+	if err := AddAfter(queueName, item, time.Duration(delayMillis)*time.Millisecond); err != nil {
+		return err
+	}
+	return Finish(queueName, consumerID)
+}
+
+// Fail retains a terminal item outside the worker queue before acknowledging it.
+func Fail(queueName, consumerID string, item any) error {
+	if err := requireSingleProcessingItem(queueName, consumerID); err != nil {
+		return err
+	}
+	if err := Add(queueName+":failed", item); err != nil {
+		return err
+	}
+	return Finish(queueName, consumerID)
+}
+
+func requireSingleProcessingItem(queueName, consumerID string) error {
+	rd, err := client()
+	if err != nil {
+		return err
+	}
+	result := rd.Do("LLEN", processingKey(queueName, consumerID))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.Int() != 1 {
+		return fmt.Errorf("retry or fail requires exactly one processing item")
+	}
+	return nil
+}
+
+// Stats reports persistent lanes without promoting or acknowledging tasks.
+func Stats(queueName, consumerID string) (map[string]int, error) {
+	rd, err := client()
+	if err != nil {
+		return nil, err
+	}
+	lanes := map[string][]any{
+		"pending":    {"LLEN", pendingKey(queueName)},
+		"processing": {"LLEN", processingKey(queueName, consumerID)},
+		"delayed":    {"ZCARD", delayedKey(queueName)},
+		"failed":     {"LLEN", pendingKey(queueName + ":failed")},
+	}
+	counts := make(map[string]int, len(lanes))
+	for name, args := range lanes {
+		result := rd.Do(args[0].(string), args[1:]...)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		counts[name] = result.Int()
+	}
+	return counts, nil
+}
+
+// PeekFailed reads a bounded page of terminal items without changing queue state.
+func PeekFailed(queueName string, offset, limit int) ([]string, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		return nil, nil
+	}
+	rd, err := client()
+	if err != nil {
+		return nil, err
+	}
+	result := rd.Do("LRANGE", pendingKey(queueName+":failed"), offset, offset+limit-1)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return result.Strings(), nil
 }
 
 func Fetch(queueName, consumerID string, n int) ([]redis.Result, error) {
@@ -165,4 +252,39 @@ func Decode[T any](result redis.Result) (T, error) {
 		return item, fmt.Errorf("decode queue item: %w", err)
 	}
 	return item, nil
+}
+
+// FetchDecoded quarantines malformed JSON without wedging processing forever.
+// Valid members of a mixed batch are persisted back to pending before ack.
+func FetchDecoded(queueName, consumerID string, n int) ([]any, error) {
+	results, err := Fetch(queueName, consumerID, n)
+	if err != nil {
+		return nil, err
+	}
+	items, invalid := []any{}, []string{}
+	for _, result := range results {
+		item, err := Decode[any](result)
+		if err != nil {
+			invalid = append(invalid, result.String())
+		} else {
+			items = append(items, item)
+		}
+	}
+	if len(invalid) == 0 {
+		return items, nil
+	}
+	for _, item := range items {
+		if err := Add(queueName, item); err != nil {
+			return nil, err
+		}
+	}
+	for _, raw := range invalid {
+		if err := Add(queueName+":failed", map[string]any{"raw": raw, "lastError": "invalid JSON queue item"}); err != nil {
+			return nil, err
+		}
+	}
+	if err := Finish(queueName, consumerID); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("%d malformed queue items retained for review", len(invalid))
 }

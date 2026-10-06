@@ -1,5 +1,14 @@
 # Test Report
 
+## v1.5.13 发布验证（2026-10-06）
+
+- `GOWORK=off go test -v ./...` 与 `GOWORK=off go test -bench=. ./...` 均通过，仅使用 go.mod 已发布依赖。
+- API 导出工具不可用；采用 `GOWORK=off go doc -all` 与导出源码交叉核对 README。
+- 本机：darwin/arm64，Apple M3 Max；基准结果仅代表本次本地运行。
+- `BenchmarkTaskRegistration-16         	 7246221	       153.9 ns/op`
+- `BenchmarkTaskExecutionOverhead/Get-16         	158872885	         7.561 ns/op`
+- `BenchmarkTaskExecutionOverhead/List-16        	17933064	        66.71 ns/op`
+
 ## v1.5.12 验证
 - 验证首次 Stop 超时后，后续 Stop 继续等待在途任务完成。
 - `TestTaskTimeout` 边界用例连续 5 次通过；全量测试重跑与 benchmark 通过。
@@ -50,3 +59,8 @@ Verified that the task-specific `context.Context` is correctly cancelled when th
 
 ## Conclusion
 All 7 test cases passed. The implementation of the `Service` interface is robust and optimized for performance.
+
+
+## v1.5.13 indexing recovery
+
+TestFailureCooldownPreservesExplicitPauseAndRecovers covers cooldown, explicit pause, success reset and automatic retry eligibility.

@@ -99,9 +99,17 @@ _ = queue.Finish("translation", "default")
 
 // 持久化延迟任务；到期后由 Fetch 提升到 pending。
 _ = queue.AddAfter("translation", item, 30*time.Second)
+
+// Retry/Fail 只支持 Fetch(..., 1) 的单项 processing，拒绝批量误确认。
+// 先保存重试项，再确认 processing；delay 以毫秒计。
+_ = queue.Retry("translation", "default", item, 5000)
+// 重试次数由宿主控制，最终失败项保留在 translation:failed。
+_ = queue.Fail("translation", "default", item)
 ```
 
 队列使用 `pending`、按消费者隔离的 `processing` 和 Sorted Set `delayed` 三条持久化通道。任务失败时不调用 `Finish`，下一次 `Fetch` 会恢复同一 processing 批次。
+
+`Stats` 只读取 pending、processing、delayed 和 failed 数量；`PeekFailed(queueName, offset, limit)` 分页只读终态失败项，不会确认或重新投递任务，适合宿主按失败来源抑制重复恢复。`FetchDecoded` 会将坏 JSON 保存到 `队列名:failed`，混合批次中的有效任务重新入队后才确认原批次。每个 consumerID 应由一个独占消费者使用；崩溃恢复采用至少一次交付，宿主必须保证幂等。
 
 `Fetch` 使用标准 `LMOVE` 原子地把任务转入 processing。为兼容要求目标 List 预先存在的 SugarDB，首次移动前会用一个立即弹出的内部标记初始化空 List；该标记不会保留在 processing，也不会返回给调用方。标准 Redis 会在弹出最后一个元素后删除 key，随后的 `LMOVE` 会按标准语义创建目标 List。
 
@@ -115,3 +123,8 @@ _ = queue.AddAfter("translation", item, 30*time.Second)
 测试全部通过，性能达标。
 
 详见：[TEST.md](./TEST.md)
+
+
+## indexing recovery
+
+Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable with exponential cooldown (up to five minutes). RetryAt is exposed in runtime snapshots. Successful execution clears cooldown; explicit Disable remains authoritative. The default zero value preserves existing scheduler behavior.

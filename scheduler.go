@@ -175,7 +175,7 @@ func (s *Scheduler) Get(name string) *Task {
 func (s *Scheduler) runTask(name string) {
 	s.mu.Lock()
 	t, ok := s.tasks[name]
-	if !s.running || !ok || t.Status == StatusDisabled {
+	if !s.running || !ok || t.Status == StatusDisabled || time.Now().Before(t.RetryAt) {
 		s.mu.Unlock()
 		return
 	}
@@ -238,12 +238,26 @@ func (s *Scheduler) runTask(name string) {
 		t.ConsecutiveFailures++
 		failures := t.ConsecutiveFailures
 		autoDisabled := t.Config.MaxConsecutiveFailures > 0 && failures >= t.Config.MaxConsecutiveFailures
-		if autoDisabled {
+		retrying := autoDisabled && t.Config.FailureRetryDelay > 0
+		if retrying {
+			delay := t.Config.FailureRetryDelay
+			for i := t.Config.MaxConsecutiveFailures; i < failures && delay < 5*time.Minute; i++ {
+				delay *= 2
+			}
+			if delay > 5*time.Minute {
+				delay = 5 * time.Minute
+			}
+			t.RetryAt = time.Now().Add(delay)
+			autoDisabled = false
+		} else if autoDisabled {
 			t.Status = StatusDisabled
 		}
 		onAutoDisable := t.Config.OnAutoDisable
 		s.mu.Unlock()
 		taskLogger.Error("task failed", "name", name, "err", err, "duration", duration.String())
+		if retrying {
+			taskLogger.Warning("task retry scheduled", "name", name, "consecutiveFailures", failures)
+		}
 		if autoDisabled {
 			taskLogger.Error("task auto disabled", "name", name, "consecutiveFailures", failures)
 			if onAutoDisable != nil {
@@ -253,11 +267,13 @@ func (s *Scheduler) runTask(name string) {
 	} else if !t.Config.SuppressSuccessLog {
 		s.mu.Lock()
 		t.ConsecutiveFailures = 0
+		t.RetryAt = time.Time{}
 		s.mu.Unlock()
 		taskLogger.Info("task success", "name", name, "duration", duration.String())
 	} else {
 		s.mu.Lock()
 		t.ConsecutiveFailures = 0
+		t.RetryAt = time.Time{}
 		s.mu.Unlock()
 	}
 }

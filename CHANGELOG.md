@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.5.13] - 2026-10-06
+
+- 发布可靠延迟重试、失败回执与调度冷却能力
+
+Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable with exponential cooldown (up to five minutes). RetryAt is exposed in runtime snapshots. Successful execution clears cooldown; explicit Disable remains authoritative. The default zero value preserves existing scheduler behavior.
+
 ## v1.5.12 - 2026-09-12
 - **重复停机**: Stop 超时后仍保留运行任务等待状态，后续 Stop 会继续等待；停止竞态不再接受新任务执行。
 

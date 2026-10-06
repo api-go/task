@@ -28,6 +28,7 @@ type Config struct {
 	Timeout                time.Duration                              `json:"timeout"`
 	SuppressSuccessLog     bool                                       `json:"suppressSuccessLog"`
 	MaxConsecutiveFailures int                                        `json:"maxConsecutiveFailures"`
+	FailureRetryDelay      time.Duration                              `json:"failureRetryDelay"`
 	OnAutoDisable          func(name string, failures int, err error) `json:"-"`
 }
 
@@ -43,11 +44,12 @@ func WithTimeout(d time.Duration) Config {
 
 // Task 代表一个被调度的任务
 type Task struct {
-	Name                string `json:"name"`
-	Spec                string `json:"spec"`
-	Config              Config `json:"config"`
-	Status              Status `json:"status"`
-	ConsecutiveFailures int    `json:"consecutiveFailures"`
+	Name                string    `json:"name"`
+	Spec                string    `json:"spec"`
+	Config              Config    `json:"config"`
+	Status              Status    `json:"status"`
+	ConsecutiveFailures int       `json:"consecutiveFailures"`
+	RetryAt             time.Time `json:"retryAt,omitempty"`
 
 	Func func(ctx context.Context) error `json:"-"`
 
@@ -85,6 +87,7 @@ func (t *Task) Enable() {
 	defer t.s.mu.Unlock()
 	t.Status = StatusIdle
 	t.ConsecutiveFailures = 0
+	t.RetryAt = time.Time{}
 }
 
 // Remove 从调度器中彻底移除该任务
