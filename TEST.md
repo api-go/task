@@ -64,3 +64,15 @@ All 7 test cases passed. The implementation of the `Service` interface is robust
 ## v1.5.13 indexing recovery
 
 TestFailureCooldownPreservesExplicitPauseAndRecovers covers cooldown, explicit pause, success reset and automatic retry eligibility.
+
+## v1.5.14 发布验证（2026-10-10）
+
+- GOWORK=off go test -v ./... 与 go test -bench=. ./... 通过，依赖均为已发布 tag。
+- API 以 GOWORK=off go doc 与导出源码交叉核对（getExports 工具不可用）。
+- GOWORK=off go test -race ./... 通过。
+
+```text
+BenchmarkTaskRegistration-16         	 7303446	       166.0 ns/op
+BenchmarkTaskExecutionOverhead/Get-16         	153838617	         7.843 ns/op
+BenchmarkTaskExecutionOverhead/List-16        	16542891	        70.36 ns/op
+```

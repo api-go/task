@@ -128,3 +128,7 @@ _ = queue.Fail("translation", "default", item)
 ## indexing recovery
 
 Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable with exponential cooldown (up to five minutes). RetryAt is exposed in runtime snapshots. Successful execution clears cooldown; explicit Disable remains authoritative. The default zero value preserves existing scheduler behavior.
+
+## v1.5.14 依赖基线
+
+本版本对齐 Log v1.5.17 与发布时模块索引中的上游已发布依赖；公开 API 保持兼容。
