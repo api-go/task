@@ -76,3 +76,16 @@ BenchmarkTaskRegistration-16         	 7303446	       166.0 ns/op
 BenchmarkTaskExecutionOverhead/Get-16         	153838617	         7.843 ns/op
 BenchmarkTaskExecutionOverhead/List-16        	16542891	        70.36 ns/op
 ```
+
+## v1.5.15 发布验证（2026-10-26）
+
+GOWORK=off，正式依赖 crypto v1.5.9，无 replace。`go test -v ./...`、`go test -bench=. ./...`、`go vet ./...`、`go mod verify` 通过。使用 `go doc` 与源码交叉核对 API，替代 getExports。现有回归覆盖本模块业务；新旧 GCM 格式、认证失败和性能基准见 crypto v1.5.9。
+
+本次功能测试无跳过。
+
+基准结果：
+```text
+BenchmarkTaskRegistration-16         	 7430384	       162.6 ns/op
+BenchmarkTaskExecutionOverhead/Get-16         	153564003	         7.851 ns/op
+BenchmarkTaskExecutionOverhead/List-16        	17104585	        70.02 ns/op
+```
