@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"apigo.cc/go/cast"
-	"apigo.cc/go/redis"
+	"github.com/api-go/cast"
+	"github.com/api-go/redis"
 )
 
 var delayedSequence uint64

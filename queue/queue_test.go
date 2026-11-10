@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"apigo.cc/go/redis"
-	"apigo.cc/go/task/queue"
+	"github.com/api-go/redis"
+	"github.com/api-go/task/queue"
 )
 
 type queueItem struct {

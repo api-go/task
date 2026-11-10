@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"apigo.cc/go/task"
+	"github.com/api-go/task"
 )
 
 func waitTaskIdle(t *testing.T, job *task.Task, failures int) {

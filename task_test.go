@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"apigo.cc/go/task"
+	"github.com/api-go/task"
 	"os"
 )
 

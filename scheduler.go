@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"apigo.cc/go/id"
-	"apigo.cc/go/log"
+	"github.com/api-go/id"
+	"github.com/api-go/log"
 	"github.com/robfig/cron/v3"
 )
 

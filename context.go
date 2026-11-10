@@ -3,7 +3,7 @@ package task
 import (
 	"context"
 
-	"apigo.cc/go/log"
+	"github.com/api-go/log"
 )
 
 type loggerContextKey struct{}

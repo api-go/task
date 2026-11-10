@@ -1,3 +1,7 @@
+## [v1.5.16] - 2026-11-10
+
+- 迁移至 github.com/api-go/task，同步内部模块路径与依赖。
+
 # Changelog
 
 ## v1.5.15（2026-10-26）
@@ -20,7 +24,7 @@ Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable wi
 - **依赖对齐**: 补齐 `config`、`file`、`log` 与 `redis` 的级联版本。
 
 ## v1.5.9 - 2026-09-05
-- **依赖对齐**: 升级全部 `apigo.cc/go/*` 依赖至当前已发布版本。
+- **依赖对齐**: 升级全部 `github.com/api-go/*` 依赖至当前已发布版本。
 
 ## v1.5.8 - 2026-08-31
 - **失败保护**: 支持连续失败次数统计、自动停用回调及状态快照，避免任务持续消耗资源。
@@ -44,7 +48,7 @@ Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable wi
 
 ## v1.5.2 - 2026-06-05
 - **优化: 生命周期日志清理**:
-  - 移除了内部冗余的 `scheduler started` 与 `scheduler stopped gracefully` 控制台输出。这些状态现由 `apigo.cc/go/starter` 框架统一劫持并提供标准化的生命周期审计。
+  - 移除了内部冗余的 `scheduler started` 与 `scheduler stopped gracefully` 控制台输出。这些状态现由 `github.com/api-go/starter` 框架统一劫持并提供标准化的生命周期审计。
 
 ## v1.5.1 - 2026-06-04
 - **依赖升级**: 全面对接 `@go` 基础设施 v1.5.1。
@@ -55,8 +59,8 @@ Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable wi
 ## v1.3.0 - 2026-05-14
 
 - **基础设施对齐 (Infrastructure Alignment)**:
-    - 升级 `apigo.cc/go/log` 至 `v1.3.2`。
-    - 引入 `apigo.cc/go/timer` 模块支持 (预留用于未来更精细的时间调度)。
+    - 升级 `github.com/api-go/log` 至 `v1.3.2`。
+    - 引入 `github.com/api-go/timer` 模块支持 (预留用于未来更精细的时间调度)。
 - **代码重构与类型对齐**:
     - 将 `Task.entryID` 类型从 `int` 修改为更严谨的 `cron.EntryID`。
     - 移除不必要的类型转换。
@@ -85,7 +89,7 @@ Config.FailureRetryDelay optionally replaces consecutive-failure auto-disable wi
     - 移除冗余且危险的 `PolicyQueue` 策略，推荐使用 `PolicySkip` 结合外部队列。
 - **基础设施对齐**: 
     - 集成 `@go/log` 实现标准化的异步元数据日志记录。
-    - 对齐 `apigo.cc/go/cast` 和 `apigo.cc/go/log` v1.3.0 标准。
+    - 对齐 `github.com/api-go/cast` 和 `github.com/api-go/log` v1.3.0 标准。
 
 ## v1.0.0
 

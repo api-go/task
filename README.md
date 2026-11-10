@@ -11,7 +11,7 @@
 ## 📦 安装
 
 ```bash
-go get apigo.cc/go/task
+go get github.com/api-go/task
 ```
 
 ## 💡 快速开始
@@ -20,7 +20,7 @@ go get apigo.cc/go/task
 任务函数必须遵循 `func(ctx context.Context) error` 签名，以便处理超时和优雅退出。
 
 ```go
-import "apigo.cc/go/task"
+import "github.com/api-go/task"
 
 // 简单注册（使用默认配置）
 task.Add("CleanLog", "@daily", func(ctx context.Context) error {
@@ -89,7 +89,7 @@ task.Add("Report", "@every 1m", func(ctx context.Context) error {
 `task/queue` 按全局队列名使用约定连接 `redis.task`，调用方无需持有 Redis Client 或 Context：
 
 ```go
-import "apigo.cc/go/task/queue"
+import "github.com/api-go/task/queue"
 
 _ = queue.Add("translation", item)
 items, _ := queue.Fetch("translation", "default", 50)
